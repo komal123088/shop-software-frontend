@@ -61,191 +61,42 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     setLoading(true);
-    setError(null);
-
     try {
-      console.log("📊 Fetching dashboard data...");
-      
-      // 1. Today's Sales
-      const today = format(new Date(), "yyyy-MM-dd");
-      console.log("Fetching today's sales for:", today);
-      
-      const todayRes = await api.get(API_ENDPOINTS.SALE_REPORT, {
-        params: { start: today, end: today },
-      });
-      console.log("Today's sales response:", todayRes.data);
-      
-      const todayData = todayRes.data || {};
-
-      // 2. Current Month Sales
-      const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
-      const monthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
-      console.log("Fetching monthly sales:", monthStart, "to", monthEnd);
-      
-      const monthRes = await api.get(API_ENDPOINTS.SALE_REPORT, {
-        params: { start: monthStart, end: monthEnd },
-      });
-      console.log("Monthly sales response:", monthRes.data);
-      
-      const monthData = monthRes.data || {};
-
-      // 3. Last 7 days trend - fetch each day individually for accurate data
-      const sevenDaysAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
-      console.log("Fetching 7-day trend:", sevenDaysAgo, "to", today);
-      
-      const trendRes = await api.get(API_ENDPOINTS.SALE_REPORT, {
-        params: { start: sevenDaysAgo, end: today },
-      });
-      console.log("Trend response:", trendRes.data);
-      
-      const trendData = trendRes.data || {};
-
-      // Generate daily sales array from trend data or create sample data
-      const dailySalesArray = [];
-      if (trendData.dailySales && Array.isArray(trendData.dailySales)) {
-        // Use the daily sales from response
-        dailySalesArray.push(...trendData.dailySales);
-      } else {
-        // Generate last 7 days of sales data from the trend response
-        // This is a fallback - you might need to adjust based on your actual API response
-        for (let i = 6; i >= 0; i--) {
-          const date = format(subDays(new Date(), i), "yyyy-MM-dd");
-          try {
-            const dayRes = await api.get(API_ENDPOINTS.SALE_REPORT, {
-              params: { start: date, end: date },
-            });
-            dailySalesArray.push(dayRes.data?.totalSales || 0);
-          } catch (err) {
-            dailySalesArray.push(0);
-          }
-        }
-      }
-
-      // 4. Products
-      console.log("Fetching products...");
-      const productsRes = await api.get(API_ENDPOINTS.PRODUCTS);
-      console.log("Products response:", productsRes.data);
-      
-      const products = Array.isArray(productsRes.data) ? productsRes.data : 
-                      (productsRes.data.products || []);
-      
-      const lowStock = products.filter((p) => (p.stock || 0) <= 5).length;
-
-      // 5. Total Sales count
-      console.log("Fetching all sales...");
-      const salesRes = await api.get(API_ENDPOINTS.SALE);
-      console.log("Sales response:", salesRes.data);
-      
-      const allSales = Array.isArray(salesRes.data) ? salesRes.data : 
-                      (salesRes.data.sales || []);
-      
-      const totalSalesCount = allSales.length;
-
-      // Get recent sales for activity feed
-      const recentSalesList = allSales.slice(0, 5).map(sale => ({
-        id: sale.id || sale._id,
-        message: `Sale #${sale.saleNumber || sale.id} - RS ${sale.total || 0}`,
-        createdAt: sale.createdAt,
-        type: 'sale'
-      }));
-
-      setRecentSales(recentSalesList);
-
-      // 6. Permanent customers for remaining credit
-      console.log("Fetching permanent customers...");
-      const permanentCustomersRes = await api.get(API_ENDPOINTS.PERMANENT);
-      console.log("Permanent customers response:", permanentCustomersRes.data);
-      
-      const permanentCustomers = Array.isArray(permanentCustomersRes.data) ? 
-        permanentCustomersRes.data : 
-        (permanentCustomersRes.data.customers || []);
-
-      const totalRemaining = permanentCustomers.reduce(
-        (sum, c) => sum + (parseFloat(c.remainingDue) || 0),
-        0,
-      );
-
-      // 7. Employees
-      console.log("Fetching employees...");
-      const employeesRes = await api.get(API_ENDPOINTS.EMPLOYEES);
-      console.log("Employees response:", employeesRes.data);
-      
-      const employeesData = employeesRes.data.data || 
-                           (Array.isArray(employeesRes.data) ? employeesRes.data : []);
-
-      // Calculate profit (you might need to adjust this based on your data)
-      const todayProfit = todayData.profit || (todayData.totalSales * 0.3) || 0;
-      const monthProfit = monthData.profit || (monthData.totalSales * 0.3) || 0;
+      const res = await api.get("/dashboard/stats"); // sirf ek call!
+      const d = res.data;
 
       setStats({
-        dailySales: parseFloat(todayData.totalSales) || 0,
-        monthlySales: parseFloat(monthData.totalSales) || 0,
-        totalProfit: parseFloat(todayProfit || monthProfit) || 0,
-        todaysOrders: todayData.saleCount || 0,
-        lowStockCount: lowStock,
-        totalCustomers: totalSalesCount,
-        totalProducts: products.length,
-        totalEmployees: employeesData.length,
-        totalRemaining,
+        dailySales: d.dailySales,
+        monthlySales: d.monthlySales,
+        totalProfit: d.totalProfit,
+        todaysOrders: d.todaysOrders,
+        lowStockCount: d.lowStockCount,
+        totalCustomers: d.totalCustomers,
+        totalProducts: d.totalProducts,
+        totalEmployees: d.totalEmployees,
+        totalRemaining: 0, // agar chahiye toh alag endpoint se lo
       });
 
-      setSalesReport({
-        daily: dailySalesArray.length > 0 ? dailySalesArray : [18000, 22000, 19500, 28000, 25500, 32000, 29000],
-        weekly: monthData.weekly || [],
-        monthly: monthData.monthly || [],
-      });
-
-      // Handle top products - check different possible structures
-      const topProductsData = todayData.topProducts || monthData.topProducts || [];
-      console.log("Top products data:", topProductsData);
-      setTopProducts(topProductsData);
-
+      setSalesReport({ daily: d.salesTrend.data });
+      setTopProducts(d.topProducts);
+      setRecentSales(d.recentSales);
     } catch (err) {
-      console.error("❌ Dashboard data fetch error:", err);
-      console.error("Error details:", err.response?.data || err.message);
-      
-      setError("Failed to load dashboard data. Using sample data.");
-
-      // Set sample data for better UX
-      setStats({
-        dailySales: 25500,
-        monthlySales: 748000,
-        totalProfit: 182000,
-        todaysOrders: 48,
-        lowStockCount: 8,
-        totalCustomers: 234,
-        totalProducts: 156,
-        totalEmployees: 12,
-        totalRemaining: 125000,
-      });
-
-      setSalesReport({
-        daily: [18000, 22000, 19500, 28000, 25500, 32000, 29000],
-        weekly: [120000, 145000, 132000, 168000],
-        monthly: [580000, 620000, 705000, 748000],
-      });
-
-      setTopProducts([
-        { name: "Product A", revenue: 45000 },
-        { name: "Product B", revenue: 38000 },
-        { name: "Product C", revenue: 32000 },
-        { name: "Product D", revenue: 28000 },
-        { name: "Product E", revenue: 21000 },
-      ]);
+      console.error("Dashboard error:", err);
+      setError("Failed to load data");
     } finally {
       setLoading(false);
     }
   };
-
   // Prepare chart data
   const salesChartData = {
     labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     datasets: [
       {
         label: "Daily Sales (RS)",
-        data: salesReport.daily.length === 7 
-          ? salesReport.daily 
-          : [18000, 22000, 19500, 28000, 25500, 32000, 29000],
+        data:
+          salesReport.daily.length === 7
+            ? salesReport.daily
+            : [18000, 22000, 19500, 28000, 25500, 32000, 29000],
         borderColor: "#0d6efd",
         backgroundColor: "rgba(13, 110, 253, 0.2)",
         tension: 0.4,
@@ -259,8 +110,8 @@ export default function Dashboard() {
     datasets: [
       {
         data: [
-          stats.totalProfit, 
-          Math.max(0, stats.monthlySales - stats.totalProfit)
+          stats.totalProfit,
+          Math.max(0, stats.monthlySales - stats.totalProfit),
         ],
         backgroundColor: ["#198754", "#dc3545"],
         hoverOffset: 10,
@@ -273,7 +124,9 @@ export default function Dashboard() {
     datasets: [
       {
         label: "Sales (RS)",
-        data: topProducts.slice(0, 5).map((p) => parseFloat(p.revenue || p.sales || 0)),
+        data: topProducts
+          .slice(0, 5)
+          .map((p) => parseFloat(p.revenue || p.sales || 0)),
         backgroundColor: [
           "#0d6efd",
           "#198754",
@@ -310,7 +163,7 @@ export default function Dashboard() {
       tooltip: {
         callbacks: {
           label: (context) => {
-            const label = context.label || '';
+            const label = context.label || "";
             const value = context.raw || 0;
             return `${label}: RS ${value.toLocaleString()}`;
           },
@@ -363,8 +216,8 @@ export default function Dashboard() {
           <Link to="/sales/pos" className="btn btn-primary">
             <i className="bi bi-cart-plus me-2"></i> New Sale
           </Link>
-          <button 
-            className="btn btn-outline-primary" 
+          <button
+            className="btn btn-outline-primary"
             onClick={fetchDashboardData}
             title="Refresh Data"
           >
